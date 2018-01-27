@@ -2,7 +2,8 @@ import argparse
 import cFilter
 import sFilter
 import bedFilter
-import relffab
+import baffler
+import svHelpers
 import pandas as pd
 import detexy
 import numpy as np
@@ -58,14 +59,12 @@ def main(tumor_tab, tumor_bam, normal_tab, normal_bam, config, gatk_path=None, r
 
 	if run_baffler is True:
 		print("Running baffler...")
-		baffler = relffab.baffler(reference_fasta=REFERENCE_FASTA, log=BAFFLER_LOG)
-		baffler.configure(config)
-		baffler_results = baffler.run_Baffler(
+		bf = baffler.baffler(reference_fasta=REFERENCE_FASTA, log=BAFFLER_LOG)
+		svHelpers.configure(bf, config, 'baffler')
+		baffler_results = bf.run_baffler(
 			tumor_tab=sFilter_results,
-			passed_tumor_df=True,
 			tumor_bam=tumor_bam,
-			merge=True,
-			limited=True,
+			merge=True
 		)
 	else:
 		baffler_results = sFilter_results
