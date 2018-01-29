@@ -27,7 +27,7 @@ cFilter:
     low_complexity:
         distance_to_low_complexity: 400
         low_complexity_min_length: 50
-        dustmaker_file: '/hpf/largeprojects/adam/projects/ewing_sarcoma/analysis/sv/delly/0.5.9/Mar11_Andrej/code/dustmasker60.bed'
+        dustmaker_file: './data/dustmasker60.bed'
     multi_mapping:
         chromosomes: 4
         reads: 3
