@@ -1,15 +1,13 @@
-import pysam
-import sys
-import pandas as pd
-import numpy as np
-import os
-import yaml
+"""
+Detexy identifies structural rearrangements that participate in chromoplectic loops.
+"""
+
 import warnings
+import yaml
+
+import pandas as pd
 import networkx as nx
-import matplotlib
-# matplotlib.use('Agg')
-import matplotlib.gridspec as gridspec
-import matplotlib.pyplot as plt
+import numpy as np
 
 class detexy():
 
@@ -17,10 +15,10 @@ class detexy():
 
         self.breakpoint_distance = 150000
         self.reciprocal_distance = 200
-        self.detexy_plots_dir = './'
         self.chain_properties = {
             'single_svtype': ['TRA', 'INV'],
         }
+        self.PYSAM_ZERO_BASED = 1
 
     def configure(self, config, class_name='detexy'):
 
@@ -59,25 +57,23 @@ class detexy():
             else:
                 default_arg = getattr(self, option, 'MISSING')
                 if default_arg is 'MISSING':
-                        warnings.warn('Argument {arg} specified in config is not an allowed property.'.format(arg=opt))
-                        continue
+                    warnings.warn('Argument {arg} specified in config is not an allowed property.'.format(arg=opt))
+                    continue
                 if not isinstance(options[option], type(default_arg)) and default_arg is not None:
                     warnings.warn('Argument {arg} specified in config is not the same type as the default: {default} = {d}, default type: {t}, passed type: {tp}'.format(arg=opt, default=opt, d=default_arg, t=type(default_arg), tp=type(options[option])))
                     continue
                 setattr(self, option, options[option])
 
-    def run_detexy(self, tumor_tab, passed_tumor_df=False, plot_results=True):
+    def run_detexy(self, tumor_tab, passed_tumor_df=False):
 
         """
 
-        python run_detexy(tumor_tab, passed_tumor_df=False, return_graphs=False, plot_results=True)
+        python run_detexy(tumor_tab, passed_tumor_df=False, return_graphs=False)
 
         Input Arguments:
 
             - tumor_tab: path to Pype tumor tab file, or pandas DataFrame.
             - passed_tumor_df: Pass True if tumor_tab passed as pandas DataFrame.
-            - plot_results: Pass True if chromoplectic chains should be plotted and saved to disk.
-
 
         Returns:
 
@@ -112,13 +108,6 @@ class detexy():
         chromoplectic = self.validate_chains(chromoplectic)
 
         chromoplectic_results = pd.merge(df_tumor, chromoplectic, how='left', on=['Chromosome1', 'Chromosome2', 'Position1', 'Position2'])
-
-        if plot_results is True:
-            if isinstance(tumor_tab, str):
-                output_file = tumor_tab.strip('.tab') + '.detexy.plots.png'
-            else:
-                output_file = self.detexy_plots_dir + 'detexy.plots.png'
-            self.plot_detexy_results(output_file, chromoplectic_results, cgraphs)
 
         return chromoplectic_results
 
@@ -319,8 +308,8 @@ class detexy():
         """
 
         G=nx.Graph()
-        nodes.apply(lambda x: G.add_node(x.event_id), 1);
-        edges.apply(lambda x: G.add_edge(x.from_node, x.to_node), 1);
+        nodes.apply(lambda x: G.add_node(x.event_id), 1)
+        edges.apply(lambda x: G.add_edge(x.from_node, x.to_node), 1)
         graphs = list(nx.connected_component_subgraphs(G))
         return (G, graphs)
 
@@ -390,48 +379,3 @@ class detexy():
             return None
         edges = r[['event_id_x', 'event_id_y']].rename(columns={'event_id_x': 'from_node', 'event_id_y': 'to_node'})
         return edges
-
-
-    def plot_detexy_results(self, output_file, chromoplectic_results, graphs):
-
-        chromoplectic_results['event_label'] = chromoplectic_results.apply(lambda x: x.Chromosome1 + ':' + x.Chromosome2, axis=1)
-
-        colours = [['DEL', '#BC8F8F'], ['TRA', '#6495ED'], ['DUP', '#2E8B57'], ['INV', '#BA55D3']]
-        colours = pd.DataFrame(colours, columns=['SVTYPE', 'colour'])
-
-        labels = {}
-        for idx, event in chromoplectic_results[['event_id', 'event_label']].iterrows():
-            labels[str(event.event_id)] = event.event_label
-
-        ratios = [len(g.nodes()) for g in graphs]
-        node_count = np.sum(ratios)
-        gs = gridspec.GridSpec(len(graphs), 1, height_ratios=ratios)
-
-        fig = plt.figure()
-        for g, axo in zip(graphs, gs):
-            nodes = [str(x) for x in g.nodes()]
-            nodes_for_index = [int(x) for x in g.nodes()]
-
-            events_in_graph = chromoplectic_results[chromoplectic_results.event_id.isin(nodes_for_index)]
-            chain_id = events_in_graph.chain_id.unique()[0]
-            reciprocal = events_in_graph.reciprocal.unique()[0]
-            events_in_graph = pd.merge(events_in_graph, colours, how='left', on='SVTYPE')
-            node_colours = [events_in_graph[events_in_graph.event_id == x].colour.item() for x in nodes_for_index]
-            event_type_labels = [events_in_graph[events_in_graph.event_id == x].SVTYPE.item() for x in nodes_for_index]
-            graph_labels = {}
-            for l in labels.keys():
-                if l in nodes:
-                    graph_labels[int(l)] = labels[l]
-            pos = nx.spring_layout(g , iterations=200)
-            ax = plt.subplot(axo)
-            nx.draw(g, pos=pos, ax=ax, labels=graph_labels, node_size=1200, node_shape='o', node_color=node_colours)
-            ax.set_title('Chain ID: {c}, reciprocal: {rec}'.format(c=chain_id, rec=reciprocal))
-
-        for idx, label in colours[['SVTYPE', 'colour']].drop_duplicates().iterrows():
-            ax.bar(0, 0, color=label['colour'], alpha=0.8,
-                                    label=label['SVTYPE'], linewidth=0)
-            lgd = ax.legend(loc='center right', bbox_to_anchor=(1.45,0.6), title='SVTYPE')
-
-        fig.set_size_inches(7 , (node_count * 0.7))
-        fig.savefig(output_file, bbox_inches='tight', bbox_extra_artist=(lgd,), format='png', dpi=300)
-
